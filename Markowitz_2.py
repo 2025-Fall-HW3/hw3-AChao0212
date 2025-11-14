@@ -70,8 +70,54 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        
-        
+        lookback_period = 126
+        rebalance_step = 21
+        top_n = 3
+
+        assets = self.price.columns[self.price.columns != self.exclude]
+        returns = self.returns[assets]
+        market_price = self.price[self.exclude]
+        ma200 = market_price.rolling(window=200).mean()
+
+        for i in range(lookback_period, len(self.price), rebalance_step):
+            window_ret = returns.iloc[i - lookback_period : i]
+            if window_ret.shape[0] < 2: continue
+            
+            is_bull_market = True
+            if i > 200:
+                 if market_price.iloc[i-1] < ma200.iloc[i-1]:
+                     is_bull_market = False
+
+            mean_rets = window_ret.mean()
+            std_rets = window_ret.std()
+            sharpe_ratios = mean_rets / (std_rets + 1e-8)
+            
+            top_assets = sharpe_ratios.sort_values(ascending=False).head(top_n).index
+
+            if is_bull_market:
+                selected_vol = window_ret[top_assets].std()
+                inv_vol = 1.0 / (selected_vol + 1e-8)
+                weights = inv_vol / inv_vol.sum()
+            else:
+                positive_sharpe_assets = []
+                for asset in top_assets:
+                    if sharpe_ratios[asset] > 0:
+                        positive_sharpe_assets.append(asset)
+                
+                if len(positive_sharpe_assets) > 0:
+                    selected_vol = window_ret[positive_sharpe_assets].std()
+                    inv_vol = 1.0 / (selected_vol + 1e-8)
+                    weights = inv_vol / inv_vol.sum()
+                    top_assets = positive_sharpe_assets
+                else:
+                    weights = []
+                    top_assets = []
+
+            rebalance_date = self.price.index[i]
+            self.portfolio_weights.loc[rebalance_date, :] = 0.0
+            
+            if len(top_assets) > 0:
+                self.portfolio_weights.loc[rebalance_date, top_assets] = weights.values
         """
         TODO: Complete Task 4 Above
         """
